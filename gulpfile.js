@@ -9,6 +9,20 @@ var path = require('path');
 var http = require('http');
 var vendors = []; // 配置 三方库
 
+var webpackLoaders = [ //webpack loader 配置
+    {
+        test: /\.json$/,
+        loader: 'json-loader'
+    },
+    {
+        test: /\.jsx?$/,
+        loader: 'babel-loader', // 'babel-loader' is also a legal name to reference
+        query: {
+            presets: ['latest','react','stage-2']
+        }
+    }
+];
+
 var AssembleOpt = {
     layouts: 'public/tpl/layouts/**/*.hbs',
     partials: 'public/tpl/partials/**/*.hbs',
@@ -21,7 +35,7 @@ var AssembleOpt = {
     }
 };
 
-var copyToTrunkPath = 'D:\\jiayoubao\\jyb_h5_static\\trunk\\act\\201611\\cash_back'; //配置 复制到的trunk的地址
+var copyToTrunkPath = 'D:\\jiayoubao\\jyb_h5_static\\trunk\\act\\201701\\starbucks'; //配置 复制到的trunk的地址
 
 var webpackConf = {
     externals: {
@@ -282,19 +296,7 @@ gulp.task('build-bindle-js', function () {
                        filename: '[name].bundle.js'
                    },
                    module: {
-                       loaders: [
-                           {
-                               test: /\.json$/,
-                               loader: 'json-loader'
-                           },
-                           {
-                               test: /\.jsx?$/,
-                               loader: 'babel-loader', // 'babel-loader' is also a legal name to reference
-                               query: {
-                                   presets: ['latest','react','stage-2']
-                               }
-                           }
-                       ]
+                       loaders: webpackLoaders
                    },
                    plugins: pluginArr,
                    resolve: {
@@ -471,19 +473,7 @@ gulp.task('build-vendors', function (callback) {
             library: '[name]'
         },
         module: {
-            loaders: [
-                {
-                    test: /\.json$/,
-                    loader: 'json-loader'
-                },
-                {
-                    test: /\.jsx?$/,
-                    loader: 'babel-loader', // 'babel-loader' is also a legal name to reference
-                    query: {
-                        presets: ['latest','react','stage-2']
-                    }
-                }
-            ]
+            loaders: webpackLoaders
         },
         plugins: [
             new webpack.DefinePlugin({
