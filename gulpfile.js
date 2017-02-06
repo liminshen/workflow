@@ -3,52 +3,14 @@
  *                      配置区域                      *
  ******************************************************
  */
-var NodePath = require('./config.json').NodePath;
+var totalConf = require('./total.config');
+var NodePath = totalConf.NodePath;
+if (NodePath.trim() == '') {
+    throw new RangeError('NodePath 不能为空');
+}
 var fs = require('fs');
 var path = require('path');
 var http = require('http');
-var vendors = []; // 配置 三方库
-
-var webpackLoaders = [ //webpack loader 配置
-    {
-        test: /\.json$/,
-        loader: 'json-loader'
-    },
-    {
-        test: /\.jsx?$/,
-        loader: 'babel-loader', // 'babel-loader' is also a legal name to reference
-        query: {
-            presets: ['latest','react','stage-2']
-        }
-    }
-];
-
-var AssembleOpt = {
-    layouts: 'public/tpl/layouts/**/*.hbs',
-    partials: 'public/tpl/partials/**/*.hbs',
-    pages: 'public/tpl/pages/**/*.hbs',
-    injectData: {
-        commonjsName: 'commons.js',
-        vendorsjsName: 'vendors.js',
-        vendors: vendors.length != 0,
-        useCommonChunk: true    //是否打包出commons.js
-    }
-};
-
-var copyToTrunkPath = 'D:\\jiayoubao\\jyb_h5_static\\trunk\\act\\201701\\starbucks'; //配置 复制到的trunk的地址
-
-var webpackConf = {
-    externals: {
-        'zepto': 'window.Zepto'  //配置cdn引入库，在window全局注入的对象
-    },
-    publicPath: '/assets/js/'    //当使用require.ensure时，一部请求模块的地址
-};
-
-var pcsENV = (process.argv[2] === 'production' || process.argv[2] === 'copy-to-trunk') ? {'NODE_ENV': JSON.stringify('production')} : {};
-
-var autoprefixerOpt = {
-    compatBrowser: ['Android >= 4.0', 'ios >= 7.0', '>5%'] //设置auto-prefixer的级别
-};
 
 var getSpriteDirectories = function () {
     var imagesPath = './public/assets/images';
@@ -64,27 +26,119 @@ var getSpriteDirectories = function () {
     return result;
 };
 
+var vendors = totalConf.vendors; // 配置 三方库
+var AssembleOpt = totalConf.AssembleOpt; // 配置 assemble
+var copyToTrunkPath = totalConf.copyToTrunkPath; //配置 复制到的trunk的地址
+var pcsENV = (process.argv[2] === 'production' || process.argv[2] === 'copy-to-trunk') ? {'NODE_ENV': JSON.stringify('production')} : {}; //配置 开发环境
+var autoprefixerOpt = totalConf.autoprefixerOpt; //配置 autoprefixer
 var spriteConf = {
-    spriteTPL: 'sprite_mobile.tpl', // 配置生成的sprite的模板
+    spriteTPL: totalConf.spriteTPL, // 配置sprite图的scss文件的生成模板
     spriteArr: getSpriteDirectories()
 };
+var serverConf = totalConf.serverConf; // 配置开发时的本地服务器
 
-var serverConf = {    //配置开发时的服务器
-    openBrowser: false,
-    development: {
-        root: ['./public'],
-        port: 8090,
-        livereload: {
-            hostname: '127.0.0.1'
-        }
+var basicWebpackConfig = {
+    module: {
+        loaders: [
+            {
+                test: /\.json$/,
+                loader: 'json-loader'
+            },
+            {
+                test: /\.jsx?$/,
+                loader: 'babel-loader',
+                query: {
+                    presets: ['latest','react','stage-2']
+                }
+            }
+        ]
     },
-    production: {
-        root: ['./output'],
-        port: 8090,
-        livereload: {
-            hostname: '127.0.0.1'
-        }
+    resolve: {
+        extensions: ['', '.webpack.js', '.web.js', '.js','.json','.jsx']
+    },
+    resolveLoader: {
+        root: NodePath
     }
+};
+
+var vendorsWebpackConfig = function () {
+    return wpMerge(basicWebpackConfig,{
+        entry: {
+            vendors: vendors
+        },
+        output: {
+            path: './public/assets/js',
+            filename: AssembleOpt.injectData.vendorsjsName,
+            libraryTarget: 'umd',
+            library: '[name]'
+        },
+        plugins: [
+            new webpack.DefinePlugin({
+                'process.env': pcsENV
+            }),
+            new webpack.optimize.DedupePlugin(),// 去除重复模块
+            new webpack.DllPlugin({
+                path: './public/assets/js/manifest.json',
+                name: '[name]',
+                context: __dirname
+            })
+        ]
+    });
+};
+
+var buildWebpackConfig = function () {
+    var pluginArr = [
+        // new webpack.optimize.DedupePlugin(),// 去除重复模块
+        // new webpack.optimize.OccurrenceOrderPlugin(true),// 合理分配ids
+        new webpack.DefinePlugin({
+            'process.env': pcsENV
+        })
+    ];
+    
+    if (AssembleOpt.injectData.useCommonChunk) {
+        pluginArr.unshift(
+            new webpack.optimize.CommonsChunkPlugin({ //多个页面共享一个模块文件
+                name: 'commons',
+                filename: AssembleOpt.injectData.commonjsName
+            })
+        );
+    }
+    
+    if (vendors.length > 0) {
+        pluginArr.unshift(
+            new webpack.DllReferencePlugin({
+                context: __dirname,
+                manifest: require('./public/assets/js/manifest.json')
+            })
+        );
+    }
+    
+    var entryPath = path.resolve(process.cwd(), 'public/assets/js/pages');
+    
+    var entryJson = (function (entryArr) {
+        var json = {};
+        entryArr.forEach(function (item) {
+            var basename = path.basename(item,'.js');
+            basename = path.basename(basename,'.jsx');
+            json[basename] = './'+item;// './'是为了解决奇葩的路径问题，真是醉醉的！
+        });
+        return json;
+    }(fs.readdirSync('public/assets/js/pages')));
+    
+    return wpMerge(basicWebpackConfig,{
+        context: entryPath,
+        entry: entryJson,
+        output: {
+            path: './public/assets/js',
+            filename: '[name].bundle.js',
+            publicPath: '/assets/js/'
+        },
+        plugins: pluginArr,
+        devtool: 'source-map',
+        externals: {
+            'zepto': 'window.Zepto'  //配置cdn引入库，在window全局注入的对象
+        }
+    });
 };
 
 /*
@@ -107,7 +161,6 @@ var gulp_Spritesmith = require(resovleModulePath('gulp.spritesmith'));
 var cssSprite3x = require(resovleModulePath('gulp-css-spritesmith_3x'));
 var gulp_If = require(resovleModulePath('gulp-if'));
 var mergeStream = require(resovleModulePath('merge-stream'));
-var webpackStream = require(resovleModulePath('webpack-stream'));
 var webpack = require(resovleModulePath('webpack'));
 var gulp_Tmod = require(resovleModulePath('gulp-tmod'));
 var gulp_Clean = require(resovleModulePath('gulp-clean'));
@@ -125,6 +178,7 @@ var dotPreparse = require(resovleModulePath('gulp-dot-preparse'));
 var gulp_InlineSource = require(resovleModulePath('gulp-kyh-inline-source'));
 var helper_Prettify = require(resovleModulePath('prettify'));
 var helper_Moment = require(resovleModulePath('helper-moment'));
+var wpMerge = require(resovleModulePath('webpack-merge'));
 /*
  ******************************************************
  *                      任务配置                      *
@@ -189,7 +243,7 @@ gulp.task('compile-sass', function () {
                .pipe(gulp_Sourcemaps.init())
                .pipe(gulp_Sass()
                .on('error', gulp_Sass.logError))
-               .pipe(gulp_Postcss([autoprefixer({browsers: autoprefixerOpt.compatBrowser})]))
+               .pipe(gulp_Postcss([autoprefixer(autoprefixerOpt)]))
                .pipe(gulp_Base64({
                     extensions: [/\.(png|jpg|jpeg)\?base64/i],
                     maxImageSize: 20 * 1024,              // bytes
@@ -249,74 +303,34 @@ spriteConf.spriteArr.forEach(function (item) {
    });
 });
 
-gulp.task('build-bindle-js', function () {
-    var pluginArr = [
-        // new webpack.optimize.DedupePlugin(),// 去除重复模块
-        // new webpack.optimize.OccurrenceOrderPlugin(true),// 合理分配ids
-        new webpack.DefinePlugin({
-            'process.env':pcsENV
-        })
-    ];
+gulp.task('build-vendors', function (callback) {
+    webpack(vendorsWebpackConfig(), function(err, stats) {
+        if (err) {
+            notify.onError("Error: <%= error.message %>")(err);
+            throw new gutil.PluginError('webpack:vendors', err);
+        }
+        gutil.log('[webpack:vendors]', stats.toString('normal'));
+        //可以选择的输出模式 'none'、'errors-only'、'minimal'、'normal'、'verbose';
+        callback();
+    });
+});
+
+gulp.task('build-bindle-js', function (callback) {
+    webpack(buildWebpackConfig(), function  (err, stats) {
+        if (err) {
+            notify.onError("Error: <%= error.message %>")(err);
+            throw new gutil.PluginError('webpack:build', err);
+        }
+        gutil.log('[webpack:build]', stats.toString('normal'));
+        //可以选择的输出模式 'none'、'errors-only'、'minimal'、'normal'、'verbose';
     
-    if (AssembleOpt.injectData.useCommonChunk) {
-        pluginArr.unshift(
-            new webpack.optimize.CommonsChunkPlugin({ //多个页面共享一个模块文件
-                name: 'commons',
-                filename: AssembleOpt.injectData.commonjsName
-            })
-        );
-    }
-    
-    if (vendors.length > 0) {
-        pluginArr.unshift(
-            new webpack.DllReferencePlugin({
-                context: __dirname,
-                manifest: require('./public/assets/js/manifest.json')
-            })
-        );
-    }
-    
-    var entryPath = path.resolve(process.cwd(), 'public/assets/js/pages');
-    var entryJson = (function (entryArr) {
-        var json = {};
-        entryArr.forEach(function (item) {
-            var basename = path.basename(item,'.js');
-            basename = path.basename(basename,'.jsx');
-            json[basename] = './'+item;// './'是为了解决奇葩的路径问题，真是醉醉的！
-        });
-        return json;
-    }(fs.readdirSync('public/assets/js/pages')));
-    return gulp.src('public/assets/js/pages/**/*.js')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
-               .pipe(webpackStream({
-                   context: entryPath,
-                   entry: entryJson,
-                   output: {
-                       publicPath: webpackConf.publicPath,
-                       filename: '[name].bundle.js'
-                   },
-                   module: {
-                       loaders: webpackLoaders
-                   },
-                   plugins: pluginArr,
-                   resolve: {
-                       alias: {
-                           
-                       },
-                       extensions: ['', '.webpack.js', '.web.js', '.js','.json','.jsx']
-                   },
-                   resolveLoader: {
-                       root: NodePath
-                   },
-                   devtool: 'source-map',
-                   externals: webpackConf.externals
-               },webpack, function  (err, stats) {
-                   if (err) { throw new gutil.PluginError('webpack:build', err); }
-                   gutil.log('[webpack:build]', stats.toString('normal'));
-                   //可以选择的输出模式 'none'、'errors-only'、'minimal'、'normal'、'verbose';
-               }))
-               .pipe(gulp.dest(path.dirname(entryPath)))
-               .pipe(connect.reload());
+        gulp.src('public/*.{htm,html,shtml}')
+            .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+            .pipe(connect.reload())
+            .on('end', function () {
+                callback();
+            });
+    });
 });
 
 gulp.task('compile-tmod-template', function () {
@@ -461,47 +475,7 @@ gulp.task('inline-source-html', function () {
                }))
                .pipe(gulp.dest('output'));
 });
-gulp.task('build-vendors', function (callback) {
-    webpack({
-        entry: {
-            vendors: vendors
-        },
-        output: {
-            path: './public/assets/js',
-            filename: AssembleOpt.injectData.vendorsjsName,
-            libraryTarget: 'umd',
-            library: '[name]'
-        },
-        module: {
-            loaders: webpackLoaders
-        },
-        plugins: [
-            new webpack.DefinePlugin({
-                'process.env':pcsENV
-            }),
-            new webpack.optimize.DedupePlugin(),// 去除重复模块
-            new webpack.DllPlugin({
-                path: './public/assets/js/manifest.json',
-                name: '[name]',
-                context: __dirname
-            })
-        ],
-        resolve: {
-            alias: {
-                
-            },
-            extensions: ['', '.webpack.js', '.web.js', '.js','.json','.jsx']
-        },
-        resolveLoader: {
-            root: NodePath
-        }
-    }, function(err, stats) {
-        if (err) { throw new gutil.PluginError('webpack:vendors', err); }
-        gutil.log('[webpack:vendors]', stats.toString('normal'));
-        //可以选择的输出模式 'none'、'errors-only'、'minimal'、'normal'、'verbose';
-        callback();
-    });
-});
+
 /*
  ******************************************************
  *                      Watch配置                     *
@@ -577,7 +551,14 @@ gulp.task('production',['base-complie'], function (callback) {
     runSequence('clean-output','create-output','minify-css',['minify-image','minify-js'],'inline-source-html',callback);
 });
 
-gulp.task('copy-to-trunk', ['production'],function () {
+gulp.task('copy-to-trunk', ['production'],function (callback) {
+    if (copyToTrunkPath.trim() == '') {
+        var err = new RangeError('copyToTrunkPath 不能为空');
+        notify.onError({
+                           message: "Error: <%= error.message %>"
+                       })(err);
+        throw err;
+    }
     gutil.log(gutil.colors.bold.red('复制生产文件到：'),gutil.colors.bold.yellow(copyToTrunkPath));
    return gulp.src(['./output/*.html','./output/assets/css/*.css','./output/assets/js/*.js','./output/assets/images/*.{jpg,jpeg,png,gif}','./output/assets/images/!(slice)/!(_)*.{jpg,jpeg,png,gif}'])
               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))

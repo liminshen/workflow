@@ -1,6 +1,9 @@
 /*执行工作流任务*/
 /********************************************************/
-const NodePath = require('./config.json').NodePath;
+const NodePath = require('./total.config').NodePath;
+if (NodePath.trim() == '') {
+    throw new RangeError('NodePath 不能为空');
+}
 var path = require('path');
 var fs = require('fs');
 const EventEmitter = require('events');
