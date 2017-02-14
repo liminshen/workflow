@@ -70,6 +70,7 @@ var devEnvSelect = () => inquirer.prompt(
 devEnvSelect().then(function (answers) {
     var argvArr = [answers.type];
     process.argv = process.argv.concat(argvArr);
+    process.env.NODE_ENV = (answers.type === 'production' || answers.type === 'copy-to-trunk')? 'production' : 'development';
     var cli = require(resovleModulePath('gulp-cli'));
     cli();
 });

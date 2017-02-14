@@ -29,7 +29,7 @@ var getSpriteDirectories = function () {
 var vendors = totalConf.vendors; // 配置 三方库
 var AssembleOpt = totalConf.AssembleOpt; // 配置 assemble
 var copyToTrunkPath = totalConf.copyToTrunkPath; //配置 复制到的trunk的地址
-var pcsENV = (process.argv[2] === 'production' || process.argv[2] === 'copy-to-trunk') ? {'NODE_ENV': JSON.stringify('production')} : {}; //配置 开发环境
+var pcsENV = process.env.NODE_ENV === 'production' ? {'NODE_ENV': JSON.stringify('production')} : {'NODE_ENV': JSON.stringify('development')}; //配置 开发环境
 var autoprefixerOpt = totalConf.autoprefixerOpt; //配置 autoprefixer
 var spriteConf = {
     spriteTPL: totalConf.spriteTPL, // 配置sprite图的scss文件的生成模板
@@ -54,10 +54,12 @@ var basicWebpackConfig = {
         ]
     },
     resolve: {
-        extensions: ['', '.webpack.js', '.web.js', '.js','.json','.jsx']
+        extensions: ['', '.js', '.jsx', '.json'],
+        fallback: [path.join(__dirname, './node_modules')]
     },
     resolveLoader: {
-        root: NodePath
+        root: NodePath,
+        fallback: [path.join(__dirname, './node_modules')]
     }
 };
 
@@ -76,6 +78,7 @@ var vendorsWebpackConfig = function () {
             new webpack.DefinePlugin({
                 'process.env': pcsENV
             }),
+            new webpack.optimize.OccurrenceOrderPlugin(),
             new webpack.optimize.DedupePlugin(),// 去除重复模块
             new webpack.DllPlugin({
                 path: './public/assets/js/manifest.json',
@@ -89,7 +92,7 @@ var vendorsWebpackConfig = function () {
 var buildWebpackConfig = function () {
     var pluginArr = [
         // new webpack.optimize.DedupePlugin(),// 去除重复模块
-        // new webpack.optimize.OccurrenceOrderPlugin(true),// 合理分配ids
+        new webpack.optimize.OccurrenceOrderPlugin(),// 合理分配ids
         new webpack.DefinePlugin({
             'process.env': pcsENV
         })
@@ -113,20 +116,17 @@ var buildWebpackConfig = function () {
         );
     }
     
-    var entryPath = path.resolve(process.cwd(), 'public/assets/js/pages');
-    
     var entryJson = (function (entryArr) {
         var json = {};
         entryArr.forEach(function (item) {
             var basename = path.basename(item,'.js');
             basename = path.basename(basename,'.jsx');
-            json[basename] = './'+item;// './'是为了解决奇葩的路径问题，真是醉醉的！
+            json[basename] = path.join(__dirname,'public/assets/js/pages',item);// './'是为了解决奇葩的路径问题，真是醉醉的！
         });
         return json;
     }(fs.readdirSync('public/assets/js/pages')));
     
     return wpMerge(basicWebpackConfig,{
-        context: entryPath,
         entry: entryJson,
         output: {
             path: './public/assets/js',
@@ -134,7 +134,7 @@ var buildWebpackConfig = function () {
             publicPath: '/assets/js/'
         },
         plugins: pluginArr,
-        devtool: 'source-map',
+        devtool: '#source-map',
         externals: {
             'zepto': 'window.Zepto'  //配置cdn引入库，在window全局注入的对象
         }
