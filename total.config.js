@@ -7,6 +7,7 @@ module.exports.AssembleOpt = {  // 配置 assemble
     partials: 'public/tpl/partials/**/*.hbs',
     pages: 'public/tpl/pages/**/*.hbs',
     injectData: {
+        cdnHost: 'http://localhost',
         commonjsName: 'commons.js',
         vendorsjsName: 'vendors.js',
         vendors: vendors.length > 0,

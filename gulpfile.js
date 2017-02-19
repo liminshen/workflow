@@ -121,10 +121,15 @@ var buildWebpackConfig = function () {
         entryArr.forEach(function (item) {
             var basename = path.basename(item,'.js');
             basename = path.basename(basename,'.jsx');
-            json[basename] = path.join(__dirname,'public/assets/js/pages',item);// './'是为了解决奇葩的路径问题，真是醉醉的！
+            if (json[basename] !== undefined) {
+                var err = new gutil.PluginError('webpack:build', '入口文件命名不能重复！');
+                notify.onError("Error: <%= error.message %>")(err);
+                throw err;
+            }
+            json[basename] = item;// './'是为了解决奇葩的路径问题，真是醉醉的！
         });
         return json;
-    }(fs.readdirSync('public/assets/js/pages')));
+    }(glob.sync(path.join(__dirname,'public/assets/js/pages/**/*.{js,jsx}'))));
     
     return wpMerge(basicWebpackConfig,{
         entry: entryJson,
@@ -136,7 +141,8 @@ var buildWebpackConfig = function () {
         plugins: pluginArr,
         devtool: '#source-map',
         externals: {
-            'zepto': 'window.Zepto'  //配置cdn引入库，在window全局注入的对象
+            'zepto': 'window.Zepto',  //配置cdn引入库，在window全局注入的对象
+            'jquery': 'window.jQuery'  //配置cdn引入库，在window全局注入的对象
         }
     });
 };
@@ -178,7 +184,10 @@ var dotPreparse = require(resovleModulePath('gulp-dot-preparse'));
 var gulp_InlineSource = require(resovleModulePath('gulp-kyh-inline-source'));
 var helper_Prettify = require(resovleModulePath('prettify'));
 var helper_Moment = require(resovleModulePath('helper-moment'));
+var assembleHandlebarsHelpers = require(resovleModulePath('assemble-handlebars-helpers'));
 var wpMerge = require(resovleModulePath('webpack-merge'));
+var glob = require(resovleModulePath('glob'));
+
 /*
  ******************************************************
  *                      任务配置                      *
@@ -225,11 +234,13 @@ gulp.task('compile-assemble', function () {
     app.layouts(AssembleOpt.layouts);
     app.partials(AssembleOpt.partials);
     app.pages(AssembleOpt.pages);
+    app.data(AssembleOpt.injectData);
     app.helper('prettify', helper_Prettify);
     app.helper('moment', helper_Moment);
+    app.helpers(assembleHandlebarsHelpers);
     return app.src(AssembleOpt.pages)
               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
-              .pipe(app.renderFile(AssembleOpt.injectData))
+              .pipe(app.renderFile())
               .pipe(app.dest(function (file) {
                   file.extname = '.html';
                   return 'public/';
@@ -378,13 +389,13 @@ gulp.task('clean-js', function () {
 });
 
 gulp.task('clean-css', function () {
-    return gulp.src('public/assets/css/*.{css,map}',{read:false})
+    return gulp.src('public/assets/css/**/*.{css,map}',{read:false})
                .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
                .pipe(gulp_Clean());
 });
 
 gulp.task('clean-html', function () {
-    return gulp.src('public/*.{htm,html,shtml}',{read:false})
+    return gulp.src('public/**/*.{htm,html,shtml}',{read:false})
                .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
                .pipe(gulp_Clean());
 });
@@ -401,8 +412,8 @@ gulp.task('minify-css', function () {
                 .pipe(gulp_Cssnano({zindex: false}))
                 .pipe(gulp.dest('./output/assets/css'))
                 .pipe(through2.obj(function (file, encoding, callback) {
-                    file.path = path.resolve('./public/assets/css/',path.basename(file.path));
-                    file.base = path.dirname(file.path);
+                    file.path = file.path.replace(/output/,'public');
+                    file.base = file.base.replace(/output/,'public');
                     return callback(null,file);
                 }))
                 .pipe(cssSprite3x(
@@ -455,7 +466,7 @@ gulp.task('minify-js', function () {
                */
 });
 gulp.task('inline-source-html', function () {
-    return gulp.src('public/*.html')
+    return gulp.src('public/**/*.{htm,html,shtml}')
                .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
                .pipe(gulp_InlineSource({
                                            compress: false,
@@ -560,7 +571,7 @@ gulp.task('copy-to-trunk', ['production'],function (callback) {
         throw err;
     }
     gutil.log(gutil.colors.bold.red('复制生产文件到：'),gutil.colors.bold.yellow(copyToTrunkPath));
-   return gulp.src(['./output/*.html','./output/assets/css/*.css','./output/assets/js/*.js','./output/assets/images/*.{jpg,jpeg,png,gif}','./output/assets/images/!(slice)/!(_)*.{jpg,jpeg,png,gif}'])
+   return gulp.src(['./output/**/*.html','./output/assets/css/**/*.css','./output/assets/js/*.js','./output/assets/images/*.{jpg,jpeg,png,gif}','./output/assets/images/!(slice)/**/!(_)*.{jpg,jpeg,png,gif}'])
               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
               .pipe(gulp.dest(function (file) {
                   // if (/\.(htm|html|shtml)$/i.test(file.path)) {
