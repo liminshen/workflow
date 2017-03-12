@@ -11,24 +11,36 @@
         <meta name="apple-touch-fullscreen" content="yes">
         <meta name="screen-orientation" content="portrait">
         <meta name="x5-orientation" content="portrait">
-        {{> fixFontSize }}
+        {{> fixFontSize}}
+        {{#each cssCdnURLs}}
+        <link rel="stylesheet" href="{{.}}">
+        {{/each}}
+        {{#each cssLocalCdnURLs}}
+        <link rel="stylesheet" href="{{@root.cdnHost}}{{.}}">
+        {{/each}}
         {{#if cssFile}}
-        <link rel="stylesheet" href="assets/css/{{cssFile}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}">
+        <link rel="stylesheet" href="{{relateToAssets}}css/{{cssFile}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}">
         {{/if}}
     </head>
     <body>
         {% body %}
+        <script type="text/javascript" src="{{cdnHost}}/js/jQuery/jquery-3.1.1.min.js"></script>
+        <script type="text/javascript" src="{{relateToAssets}}js/iconfont/iconfont.js"></script>
+        <script type="text/javascript" src="{{cdnHost}}/js/util.js"></script>
         {{#each cdnURLs}}
         <script src="{{.}}"></script>
         {{/each}}
+        {{#each localCdnURLs}}
+        <script src="{{@root.cdnHost}}{{.}}"></script>
+        {{/each}}
         {{#if vendors}}
-        <script src="assets/js/{{vendorsjsName}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}"></script>
+        <script src="{{relateToAssets}}js/{{vendorsjsName}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}"></script>
         {{/if}}
         {{#if useCommonChunk}}
-        <script src="assets/js/{{commonjsName}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}"></script>
+        <script src="{{relateToAssets}}js/{{commonjsName}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}"></script>
         {{/if}}
         {{#if jsFile}}
-        <script src="assets/js/{{jsFile}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}"></script>
+        <script src="{{relateToAssets}}js/{{jsFile}}?v={{moment unixtimestamp  format ="YYYYMMDDHHmmss"}}"></script>
         {{/if}}
     </body>
 </html>

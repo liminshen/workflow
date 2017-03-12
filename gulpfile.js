@@ -11,6 +11,7 @@ if (NodePath.trim() == '') {
 var fs = require('fs');
 var path = require('path');
 var http = require('http');
+var nodeOS = require('os');
 
 var getSpriteDirectories = function () {
     var imagesPath = './public/assets/images';
@@ -123,7 +124,7 @@ var buildWebpackConfig = function () {
             basename = path.basename(basename,'.jsx');
             if (json[basename] !== undefined) {
                 var err = new gutil.PluginError('webpack:build', '入口文件命名不能重复！');
-                notify.onError("Error: <%= error.message %>")(err);
+                __UTIL__.errorHandler(err);
                 throw err;
             }
             json[basename] = item;// './'是为了解决奇葩的路径问题，真是醉醉的！
@@ -185,6 +186,7 @@ var gulp_InlineSource = require(resovleModulePath('gulp-kyh-inline-source'));
 var helper_Prettify = require(resovleModulePath('prettify'));
 var helper_Moment = require(resovleModulePath('helper-moment'));
 var assembleHandlebarsHelpers = require(resovleModulePath('assemble-handlebars-helpers'));
+var handlebarsHelpers = require(resovleModulePath('handlebars-helpers'));
 var wpMerge = require(resovleModulePath('webpack-merge'));
 var glob = require(resovleModulePath('glob'));
 
@@ -204,6 +206,13 @@ const __UTIL__ = {
         }
     
         return delay;
+    },
+    errorHandler: function (err) {
+        var platform = nodeOS.platform();
+        if (platform === 'win32') {
+            notify.onError("Error: <%= error.message %>")(err);
+        }
+        console.error(err);
     }
 };
 
@@ -237,9 +246,12 @@ gulp.task('compile-assemble', function () {
     app.data(AssembleOpt.injectData);
     app.helper('prettify', helper_Prettify);
     app.helper('moment', helper_Moment);
-    app.helpers(assembleHandlebarsHelpers);
+    var helpersCollection = Object.assign({},assembleHandlebarsHelpers,handlebarsHelpers.array(),handlebarsHelpers.math(),handlebarsHelpers.comparison());
+    Object.keys(helpersCollection).forEach(function  (item) {
+        app.helper('mp'+ item, helpersCollection[item]);
+    });
     return app.src(AssembleOpt.pages)
-              .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+              .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
               .pipe(app.renderFile())
               .pipe(app.dest(function (file) {
                   file.extname = '.html';
@@ -250,7 +262,7 @@ gulp.task('compile-assemble', function () {
 
 gulp.task('compile-sass', function () {
     return gulp.src('public/assets/sass/**/*.{scss,sass}')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Sourcemaps.init())
                .pipe(gulp_Sass()
                .on('error', gulp_Sass.logError))
@@ -273,7 +285,7 @@ gulp.task('build-sprite', function () {
     
     spriteConf.spriteArr.forEach(function (item) {
         var totalStream = gulp.src('public/assets/images/' + item + '/**/_*.png')
-                              .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+                              .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                               .pipe(gulp_Spritesmith({
                                   imgName: item +'_combo.png',
                                   cssName: '_'+ item +'_combo.scss',
@@ -297,7 +309,7 @@ gulp.task('build-sprite', function () {
 spriteConf.spriteArr.forEach(function (item) {
    gulp.task('build-sprite-'+item, function () {
        var totalStream = gulp.src('public/assets/images/' + item + '/**/_*.png')
-                             .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+                             .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                              .pipe(gulp_Spritesmith({
                                  imgName: item +'_combo.png',
                                  cssName: '_'+ item +'_combo.scss',
@@ -317,7 +329,7 @@ spriteConf.spriteArr.forEach(function (item) {
 gulp.task('build-vendors', function (callback) {
     webpack(vendorsWebpackConfig(), function(err, stats) {
         if (err) {
-            notify.onError("Error: <%= error.message %>")(err);
+            __UTIL__.errorHandler(err);
             throw new gutil.PluginError('webpack:vendors', err);
         }
         gutil.log('[webpack:vendors]', stats.toString('normal'));
@@ -329,14 +341,14 @@ gulp.task('build-vendors', function (callback) {
 gulp.task('build-bindle-js', function (callback) {
     webpack(buildWebpackConfig(), function  (err, stats) {
         if (err) {
-            notify.onError("Error: <%= error.message %>")(err);
+            __UTIL__.errorHandler(err);
             throw new gutil.PluginError('webpack:build', err);
         }
         gutil.log('[webpack:build]', stats.toString('normal'));
         //可以选择的输出模式 'none'、'errors-only'、'minimal'、'normal'、'verbose';
     
         gulp.src('public/*.{htm,html,shtml}')
-            .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+            .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
             .pipe(connect.reload())
             .on('end', function () {
                 callback();
@@ -346,18 +358,19 @@ gulp.task('build-bindle-js', function (callback) {
 
 gulp.task('compile-tmod-template', function () {
     return gulp.src('public/tmod/**/*.tpl')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Changed('public/assets/js/tmod', {extension: '.js'}))
                .pipe(gulp_Tmod({
                    templateBase: 'public/tmod',
-                   type: 'cmd'
+                   type: 'cmd',
+                   helpers: 'public/tmod/helpers.js'
                }))
                .pipe(gulp.dest('public/assets/js/tmod'));
 });
 
 gulp.task('compile-dot-template', function () {
     return gulp.src('public/dot/**/*.jst')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(dotPreparse({
                                      root: 'public/dot'
                                }))
@@ -366,48 +379,48 @@ gulp.task('compile-dot-template', function () {
 
 gulp.task('clean-tmod', function () {
     return gulp.src('public/assets/js/tmod',{read: false})
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Clean());
 });
 
 gulp.task('clean-dot', function () {
     return gulp.src('public/assets/js/dot',{read: false})
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Clean());
 });
 
 gulp.task('clean-output', function () {
     return gulp.src('output',{read:false})
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Clean());
 });
 
 gulp.task('clean-js', function () {
     return gulp.src('public/assets/js/*.{js,json,map}',{read:false})
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Clean());
 });
 
 gulp.task('clean-css', function () {
     return gulp.src('public/assets/css/**/*.{css,map}',{read:false})
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Clean());
 });
 
 gulp.task('clean-html', function () {
     return gulp.src('public/**/*.{htm,html,shtml}',{read:false})
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Clean());
 });
 
 gulp.task('create-output', function () {
     return gulp.src('public/**/*.*')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp.dest('output'));
 });
 gulp.task('minify-css', function () {
     return gulp.src('public/assets/css/**/*.css')
-                .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+                .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                 .pipe(gulp_Sourcemaps.init())
                 .pipe(gulp_Cssnano({zindex: false}))
                 .pipe(gulp.dest('./output/assets/css'))
@@ -448,26 +461,26 @@ gulp.task('minify-css', function () {
 });
 gulp.task('minify-image', function () {
     return gulp.src('public/assets/images/**/!(*.tpl)')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Imagemin({verbose: true}))
                .pipe(gulp.dest('output/assets/images'));
 });
 gulp.task('minify-js', function () {
     return gulp.src('public/assets/js/*.js')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Uglify())
                .pipe(gulp.dest('output/assets/js'));
     /*
     这个是压缩整个文件夹每一个js文件，但是不支持ES6语法，文件中用了ES6语法会报错
     return gulp.src('public/assets/js/!**!/!*.js')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_Uglify())
                .pipe(gulp.dest('output/assets/js'));
                */
 });
 gulp.task('inline-source-html', function () {
     return gulp.src('public/**/*.{htm,html,shtml}')
-               .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
                .pipe(gulp_InlineSource({
                                            compress: false,
                                            rootpath: path.resolve('./output'),
@@ -562,22 +575,26 @@ gulp.task('production',['base-complie'], function (callback) {
     runSequence('clean-output','create-output','minify-css',['minify-image','minify-js'],'inline-source-html',callback);
 });
 
-gulp.task('copy-to-trunk', ['production'],function (callback) {
+gulp.task('copy-to-trunk-depend',['production'], function (callback) {
     if (copyToTrunkPath.trim() == '') {
         var err = new RangeError('copyToTrunkPath 不能为空');
-        notify.onError({
-                           message: "Error: <%= error.message %>"
-                       })(err);
+        __UTIL__.errorHandler(err);
         throw err;
     }
     gutil.log(gutil.colors.bold.red('复制生产文件到：'),gutil.colors.bold.yellow(copyToTrunkPath));
-   return gulp.src(['./output/**/*.html','./output/assets/css/**/*.css','./output/assets/js/*.js','./output/assets/images/*.{jpg,jpeg,png,gif}','./output/assets/images/!(slice)/**/!(_)*.{jpg,jpeg,png,gif}'])
-              .pipe(gulp_Plumber({errorHandler: notify.onError("Error: <%= error.message %>")}))
-              .pipe(gulp.dest(function (file) {
-                  // if (/\.(htm|html|shtml)$/i.test(file.path)) {
-                  //     file.path = file.path.replace(/\.(htm|html|shtml)$/i,'.shtml');
-                  // }
-                  var relatePath = path.relative('./output',file.base);
-                  return path.join(copyToTrunkPath,relatePath);
-              }));
+    return gulp.src(['./output/**/*.html','./output/assets/css/**/*.css','./output/assets/js/*.js','./output/assets/js/iconfont/**/*.js','./output/assets/images/*.{jpg,jpeg,png,gif}','./output/assets/images/!(slice)/**/!(_)*.{jpg,jpeg,png,gif}'])
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
+               .pipe(gulp.dest(function (file) {
+                   // if (/\.(htm|html|shtml)$/i.test(file.path)) {
+                   //     file.path = file.path.replace(/\.(htm|html|shtml)$/i,'.shtml');
+                   // }
+                   var relatePath = path.relative('./output',file.base);
+                   return path.join(copyToTrunkPath,relatePath);
+               }));
+});
+
+gulp.task('copy-to-trunk', ['copy-to-trunk-depend'],function (callback) {
+    return gulp.src('output',{read:false})
+               .pipe(gulp_Plumber({errorHandler: __UTIL__.errorHandler}))
+               .pipe(gulp_Clean());
 });
