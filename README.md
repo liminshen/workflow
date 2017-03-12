@@ -1,5 +1,8 @@
 # 工作流使用说明
 
+## 模块下载
+到仓库 [https://github.com/kuangyeheng/workflow-modules](https://github.com/kuangyeheng/workflow-modules) 下载依赖模块
+
 ## 环境配置
 1. 请安装4.7.x的nodejs环境
 2. 全局安装`gulp-cli`,执行命令`npm install -g gulp-cli`
