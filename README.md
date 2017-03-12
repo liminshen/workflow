@@ -12,10 +12,10 @@
 此时`personal.config.js`文件内容如下：
 ```javascript
 module.exports = {
-    NodePath: 'D:\\huoxingquan\\workflow_modules\\node_modules',                        //配置node_modules的路径
-    copyToTrunkPath: 'D:\\fxsd\\fanxinshidai\\xingpin-web\\src\\main\\webapp\\view',    //配置生产文件的存放路径
-    cdnHost: 'http://192.168.1.201:9090',                                               //配置全局请求地址
-    devServerPort: 8090                                                                 //配置开发服务器的端口
+    NodePath: 'D:\\project\\node_modules',                          //配置node_modules的路径
+    copyToTrunkPath: 'D:\\project\\static',                         //配置生产文件的存放路径
+    cdnHost: 'http://www.domain.com',                               //配置全局请求地址
+    devServerPort: 8888                                             //配置开发服务器的端口
 };
 ```
 
